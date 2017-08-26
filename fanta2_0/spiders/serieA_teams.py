@@ -1,3 +1,9 @@
+# Spider to scrape the names of all Serie A's teams. The names are stored
+# inside a py list and saved inside a .pckl file. These teams' names are
+# used by the spider called "real_teams_players" to scrape all the players,
+# together with thier Mantra roles, of each Serie A's team.
+
+
 import scrapy
 from scrapy_splash import SplashRequest
 import pickle
