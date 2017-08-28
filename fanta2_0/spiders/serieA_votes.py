@@ -25,8 +25,6 @@ import scrapy
 from scrapy_splash import SplashRequest
 import pickle
 import os
-import random
-from scrapy.shell import inspect_response
 
 path = '/Users/andrea/Desktop/fanta2_0'
 os.chdir(path)
@@ -49,6 +47,7 @@ class Players_votes(scrapy.Spider):
 
     def start_requests(self):
         
+        # We define the current day in the real league.
         current_day = 2
         
         f = open('serieA_votes.pckl', 'rb')
@@ -56,11 +55,29 @@ class Players_votes(scrapy.Spider):
         f.close()
         
         for url in self.start_urls:
+            # We extract the day from the url.
             url_day = int(url[::-1].split('/')[0])
-            if url_day <= current_day or len(players_database) == 0:
+            
+            last_day = self.last_scraped_day(players_database)
+            
+            # 
+            if ((url_day <= current_day and last_day < current_day)
+            or len(players_database) == 0):
                 yield SplashRequest(url, self.parse,
                     endpoint='render.html',
                     args={'wait': 0.5})
+                
+    def last_scraped_day(self, players_database):
+        
+        if len(players_database) == 0:
+            return 0
+        else:        
+            fin_list = [data for player in players_database for data in
+                        players_database[player]]
+            
+            last_scraped_day = sorted(fin_list, key=lambda x : x[0])[-1][0]
+            
+            return last_scraped_day
             
     def votes_scraping(self, splash_response):
         '''This function scrapes all the data for each player in Serie A, 
@@ -229,9 +246,6 @@ class Players_votes(scrapy.Spider):
                     # Create the final tuple.
                     fin_tuple = (day,team_name,FG_vote,ST_vote,
                                  YC,RC,Gs,Gp,Gt,Ps,Pf,Og,As,Asf)
-                    
-#                    fin_tuple = (day,team_name,labelFG,labelST)
-                        
                         
                     # If the player is not in the database we create his
                     # key and attach the value.
@@ -251,39 +265,6 @@ class Players_votes(scrapy.Spider):
     def parse(self, response):
         
         self.votes_scraping(response)
-        
-# =============================================================================
-#         f = open('serieA_votes.pckl', 'rb')
-#         players_database = pickle.load(f)
-#         f.close()
-#                         
-#         day = int(response.css('input[id="hGiornata"]::attr(value)')\
-#         .extract_first())
-#         
-#         def check_day(players_database, day):
-#             '''This function checks if the votes of a specific day of the
-#                season have already been scraped. To do that, it takes 50
-#                random players from the database and store the last day
-#                they receive a vote. If the current day appears even only
-#                once in those values that means that the data for this day
-#                have already been scraped. On the other hand, if it does
-#                not appear it means that we need to scrape the new data.
-#                It return False if we don't need to scrape and True if we do.'''
-#                
-#             values = []
-#             for trial in range(50):
-#                 random_player = random.choice(list(players_database))
-#                 players_database[random_player][-1][0].append(values)
-#             if day in values:
-#                 return False
-#             else:
-#                 return True
-#             
-#         # If the database is empty or the check function
-#         # returns True, we scrape.
-#         if len(players_database) == 0 or check_day(players_database, day):
-#             self.votes_scraping(response)
-# =============================================================================
         
         
         
