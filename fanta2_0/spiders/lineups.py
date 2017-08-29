@@ -2,39 +2,49 @@ import scrapy
 from scrapy_splash import SplashRequest
 import pickle
 import os
+import random
 
 path = '/Users/andrea/Desktop/fanta2_0'
 os.chdir(path)
 
 class AllLineups(scrapy.Spider):
     
+    def __init__(self):
+        self.last_scraped_day = 0
+        self.day = 0
+        
+        f = open('teams_names.pckl', 'rb')
+        self.teams_names = pickle.load(f)
+        f.close()
+    
     name = 'lineups'
             
     start_urls = ['http://leghe.fantagazzetta.com/fantascandalo/'+
-                  'formazioni?g=2']
-
+                  'formazioni?g=%d' % x for x in range(1,3)]
+    
+    if os.path.isfile('lineups.pckl'):
+        f = open('lineups.pckl', 'rb')
+        lineups = pickle.load(f)
+        f.close()
+        
+        random_team = random.choice(list(lineups))
+        
+        last_scraped_day = int(lineups[random_team][-1][0][0][3:])
+    
+    
     def start_requests(self):
         for url in self.start_urls:
-            yield SplashRequest(url, self.parse,
-                endpoint='render.html',
-                args={'wait': 0.3},
-            )
             
-    def teams_names_scraping(self, splash_response):
-        
-        teams_names = splash_response.xpath('//div[contains(@class,"darkgreybox")]/'+
-                                    'div[contains(@class,"col-lg-5")]/h3/'+
-                                    'text()').extract()
-        
-        return teams_names
+            url_day = int(url.split('=')[1])
+            
+            if url_day > self.last_scraped_day:            
+                yield SplashRequest(url, self.parse,
+                    endpoint='render.html',
+                    args={'wait': 0.5})
     
-    def lineups_scraping(self, splash_response, teams_names):
-        
-        day = splash_response.xpath('//ul[contains(@class,"mgiornate")]/'+
-                                    'li[contains(@class,"active")]/a/'+
-                                    'text()').extract_first()
-        
-        lineups = {team:[] for team in teams_names}
+    def lineups_scraping(self, splash_response, ateams_names):
+                
+        lineups = {team:[] for team in ateams_names}
         
         tables = splash_response.xpath('//div[contains(@class, "col-lg-12")]'+
                                 '/div[contains(@class, "row itemBox")]')
@@ -61,17 +71,21 @@ class AllLineups(scrapy.Spider):
                     
                     name = player.xpath('.//a/text()').extract_first()
                     
-                    malus = len(player.xpath('.//td[contains(@class,"tdrole")]'+
-                                             '/img'))
+                    malus = len(player.xpath(
+                            './/td[contains(@class,"tdrole")]/img'))
                     
                     if player_class == 'playerrow' and malus == 0:
-                        fin_tuple = ('Day %s' % day, name, 'YES', 'no_malus')
+                        fin_tuple = ('Day %s' % self.day, name,
+                                     'YES', 'no_malus')
                     elif player_class == 'playerrow' and malus == 1:
-                        fin_tuple = ('Day %s' % day, name, 'YES', '-0.5')
+                        fin_tuple = ('Day %s' % self.day, name,
+                                     'YES', '-0.5')
                     elif player_class == 'playerrow bnc' and malus == 0:
-                        fin_tuple = ('Day %s' % day, name, 'NO', 'no_malus')
+                        fin_tuple = ('Day %s' % self.day, name,
+                                     'NO', 'no_malus')
                     elif player_class == 'playerrow bnc' and malus == 1:
-                        fin_tuple = ('Day %s' % day, name, 'NO', '-0.5')
+                        fin_tuple = ('Day %s' % self.day, name,
+                                     'NO', '-0.5')
                         
                     fin_list.append(fin_tuple)
                 
@@ -86,38 +100,35 @@ class AllLineups(scrapy.Spider):
 
     def parse(self, response):
         
-        teams_names = self.teams_names_scraping(response)
-        
-        day = response.xpath('//ul[contains(@class,"mgiornate")]/'+
-                             'li[contains(@class,"active")]/a/'+
-                             'text()').extract_first()
+        self.day = int(response.xpath('//span[contains(@id,"LabelGiornata")]'+
+                                      '/text()').extract_first().split()[0])
         
         if not os.path.isfile('lineups.pckl'):
-            lineups = self.lineups_scraping(response, teams_names)
+            lineups = self.lineups_scraping(response, self.teams_names)
             f = open('lineups.pckl', 'wb')
             pickle.dump(lineups, f)
             f.close()
+            
         else:
-            try:
-                f = open('lineups.pckl', 'rb')
-                lineups = pickle.load(f)
+            f = open('lineups.pckl', 'rb')
+            lineups = pickle.load(f)
+            f.close()
+            
+            new_day = 'Day %d' % self.day
+            new_day = int(new_day[3:])
+            
+            if new_day > self.last_scraped_day:
+                new_lineups = self.lineups_scraping(response, self.teams_names)
+                
+                for team in lineups:
+                    lineups[team].append(new_lineups[team])
+                
+                f = open('lineups.pckl', 'wb')
+                pickle.dump(lineups, f)
                 f.close()
+            
                 
-                new_day = 'Day %s' % day
-                last_scraped_day = lineups[teams_names[0]][-1][0][0]
-                
-                if new_day != last_scraped_day:
-                    new_lineups = self.lineups_scraping(response, teams_names)
-                    
-                    for team in lineups:
-                        lineups[team].append(new_lineups[team])
-                    
-                    f = open('lineups.pckl', 'wb')
-                    pickle.dump(lineups, f)
-                    f.close()
-            except IndexError:
-                pass
-                
+
             
             
         

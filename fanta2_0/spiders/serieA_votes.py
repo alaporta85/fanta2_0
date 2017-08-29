@@ -43,12 +43,13 @@ class Players_votes(scrapy.Spider):
     name = 'serieA_votes'
             
     start_urls = ['https://www.fantagazzetta.com/voti-'+
-                  'fantacalcio-serie-a/2017-18/%d' % x for x in range(1,3)]
+                  'fantacalcio-serie-a/2017-18/%d' % x for x in range(1,39)]
 
     def start_requests(self):
         
         # We define the current day in the real league.
         current_day = 2
+        
         
         f = open('serieA_votes.pckl', 'rb')
         players_database = pickle.load(f)
@@ -64,8 +65,8 @@ class Players_votes(scrapy.Spider):
             if ((url_day <= current_day and last_day < current_day)
             or len(players_database) == 0):
                 yield SplashRequest(url, self.parse,
-                    endpoint='render.html',
-                    args={'wait': 0.5})
+                                    endpoint='render.html',
+                                    args={'wait': 0.5})
                 
     def last_scraped_day(self, players_database):
         
@@ -77,7 +78,19 @@ class Players_votes(scrapy.Spider):
             
             last_scraped_day = sorted(fin_list, key=lambda x : x[0])[-1][0]
             
-            return last_scraped_day
+            check_list = []
+            
+            for player in fin_list:
+                if player[0] == last_scraped_day:
+                    team = player[1]
+                    if team not in check_list:
+                        check_list.append(team)
+                        
+            if len(check_list) == 20:
+                return last_scraped_day
+            else:
+                return last_scraped_day - 1
+            
             
     def votes_scraping(self, splash_response):
         '''This function scrapes all the data for each player in Serie A, 
@@ -265,6 +278,9 @@ class Players_votes(scrapy.Spider):
     def parse(self, response):
         
         self.votes_scraping(response)
+        
+        
+
         
         
         
