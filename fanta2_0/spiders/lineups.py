@@ -20,7 +20,7 @@ class AllLineups(scrapy.Spider):
     name = 'lineups'
             
     start_urls = ['http://leghe.fantagazzetta.com/fantascandalo/'+
-                  'formazioni?g=%d' % x for x in range(1,3)]
+                  'formazioni?g=%d' % x for x in range(1,39)]
     
     if os.path.isfile('lineups.pckl'):
         f = open('lineups.pckl', 'rb')
