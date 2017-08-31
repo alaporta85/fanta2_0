@@ -151,22 +151,24 @@ class Cday_lineups_votes(scrapy.Spider):
                     # Player's name
                     name = player.xpath('.//a/text()').extract_first()
                     
+                    roles = player.xpath('.//td/span[contains(@class,"role")]/text()').extract()
+                    
                     # To assign the malus we extract the len of the element:
                     # len == 0 means no-malus, len == 1 means '-0.5'
                     malus = len(player.xpath(
                             './/td[contains(@class,"tdrole")]/img'))
                     
                     if player_class == 'playerrow' and malus == 0:
-                        fin_tuple = ('Day %s' % self.url_day, name,
+                        fin_tuple = ('Day %s' % self.url_day, name, roles,
                                      'YES', 'no_malus')
                     elif player_class == 'playerrow' and malus == 1:
-                        fin_tuple = ('Day %s' % self.url_day, name,
+                        fin_tuple = ('Day %s' % self.url_day, name, roles,
                                      'YES', '-0.5')
                     elif player_class == 'playerrow bnc' and malus == 0:
-                        fin_tuple = ('Day %s' % self.url_day, name,
+                        fin_tuple = ('Day %s' % self.url_day, name, roles,
                                      'NO', 'no_malus')
                     elif player_class == 'playerrow bnc' and malus == 1:
-                        fin_tuple = ('Day %s' % self.url_day, name,
+                        fin_tuple = ('Day %s' % self.url_day, name, roles,
                                      'NO', '-0.5')
                         
                     fin_list.append(fin_tuple)
