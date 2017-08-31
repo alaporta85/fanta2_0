@@ -151,6 +151,7 @@ class Cday_lineups_votes(scrapy.Spider):
                     # Player's name
                     name = player.xpath('.//a/text()').extract_first()
                     
+                    # Player's roles
                     roles = player.xpath('.//td/span[contains(@class,"role")]/text()').extract()
                     
                     # To assign the malus we extract the len of the element:
