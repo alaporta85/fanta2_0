@@ -101,7 +101,10 @@ def check_attack(list_of_tuples, module):
     return list(all_possible_attacks)
 
 
-def optimal_solution(field, bench, n_subst):
+def mantra_simulation(list_of_tuples):
+    
+    field,bench,n_subst = players_with_vote(list_of_tuples, mode='ST')
+    
     players_from_bench = list(combinations(bench, n_subst))
     all_lineups = []
     all_valid_lineups = []

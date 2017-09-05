@@ -8,7 +8,7 @@ os.chdir(path)
 
 class Teams_names(scrapy.Spider):
     
-    name = 'teams_names'
+    name = 'fantateams_names'
     
     start_urls = ['http://leghe.fantagazzetta.com/fantascandalo/squadre']
     
@@ -23,6 +23,6 @@ class Teams_names(scrapy.Spider):
         teams_names = response.xpath('//div[contains(@class,"teambox")]/'+
                                      'div/h3/text()').extract()
         
-        f = open('teams_names.pckl', 'wb')
+        f = open('fantateams_names.pckl', 'wb')
         pickle.dump(teams_names, f)
         f.close()
