@@ -63,9 +63,10 @@ class Player(object):
                 self.As += day[12]
                 self.Asf += day[13]
             calculate_avrg(self)
-            print('ciao')
             
         update_player(self)
+        
+class 
     
     
     
