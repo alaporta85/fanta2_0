@@ -62,19 +62,19 @@ class Cday_lineups_votes(scrapy.Spider):
         self.cday = 0              # Days of Serie A already played
         self.count = 0             # Counter (see below inside parse_cday)
         
-        # We load the names of the fanta-teams
+        # Load the names of the fanta-teams
         f = open('fantateams_names.pckl', 'rb')
         self.teams_names = pickle.load(f)
         f.close()
         
-        # We set this condition to set properly the value of last day which is
+        # Set this condition to set properly the value of last day which is
         # already scraped. If the file 'lineups.pckl' doesn't exist inside the
         # wdir this value is 0, as initialized inside __init__. On the other
         # hand, if it is not the first time we run the script and there is
         # already a .pckl file containing the previous lineups what we do is:
         if os.path.isfile('lineups.pckl'):
             
-            # We open the file containing the previous lineups
+            # Open the file containing the previous lineups
             f = open('lineups.pckl', 'rb')
             lineups = pickle.load(f)
             f.close()
@@ -91,7 +91,7 @@ class Cday_lineups_votes(scrapy.Spider):
     
     name = 'cday_lineups_votes'
     
-    # We divide all the links to scrape in three different lists. The reason
+    # Divide all the links to scrape in three different lists. The reason
     # is that we need the value of self.cday to be scraped first because it
     # will be used later during the lineups' and votes' scraping. Putting all
     # the links inside start_urls would result in a random scraping
@@ -144,7 +144,7 @@ class Cday_lineups_votes(scrapy.Spider):
                 
                 for player in players_container:
                     
-                    # We need the css class of the player because based on that
+                    # Need the css class of the player because based on that
                     # we will assign a value of 'YES' or 'NO' inside the tuple
                     player_class = player.xpath('@class').extract_first()
                     
@@ -200,7 +200,7 @@ class Cday_lineups_votes(scrapy.Spider):
             players_database = pickle.load(f)
             f.close()
         
-        # Otherwisw we initialize it as an empty dict
+        # Otherwise we initialize it as an empty dict
         except FileNotFoundError:
             players_database = {}
                 
@@ -215,7 +215,7 @@ class Cday_lineups_votes(scrapy.Spider):
                         
             for player in players:
                 
-                # We extract the role of the player to make sure we don't
+                # Extract the role of the player to make sure we don't
                 # scrape data related to the coach
                 role = player.xpath('.//span[contains(@class,"role")]/text()')\
                                     .extract_first()
@@ -477,7 +477,7 @@ class Cday_lineups_votes(scrapy.Spider):
         
     def parse_votes(self, response):
         
-        # We define again the day for the same reasons as for parse_lineups
+        # Define again the day for the same reasons as for parse_lineups
         self.url_day = int(response.xpath('//input[contains'+
                     '(@id,"hGiornata")]/@value').extract_first())
         
