@@ -52,6 +52,11 @@ class SerieA_fantateams_schedule(scrapy.Spider):
         serieA_teams = response.xpath('//h3[contains(@class,"pull-left")]/'+
                                       'a/text()').extract()
         
+        # Every team has to be uppercase to be consistent with the format which
+        # appears in the players_database
+        for team in serieA_teams:
+            serieA_teams[serieA_teams.index(team)] = team.upper()
+        
         # Save the final result
         f = open('serieA_teams.pckl', 'wb')
         pickle.dump(serieA_teams, f)

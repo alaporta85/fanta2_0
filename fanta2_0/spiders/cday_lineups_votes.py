@@ -454,8 +454,8 @@ class Cday_lineups_votes(scrapy.Spider):
         
         # If there is already the file with some already scraped data inside
         # then we first open it and load the content. Then we scrape the new
-        # data, append them to the loaded variable and overwrite the old file
-        # with the updated one.
+        # data, append them to the loaded variable, sort the by day and
+        # overwrite the old file with the updated one.
         else:
             f = open('lineups.pckl', 'rb')
             lineups = pickle.load(f)
@@ -465,6 +465,9 @@ class Cday_lineups_votes(scrapy.Spider):
             
             for team in lineups:
                 lineups[team].append(new_lineups[team][0])
+            for fantateam in lineups:
+                lineups[fantateam] = sorted(lineups[fantateam],
+                                            key=lambda x:x[0])
             
             f = open('lineups.pckl', 'wb')
             pickle.dump(lineups, f)

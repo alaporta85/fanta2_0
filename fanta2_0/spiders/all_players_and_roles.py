@@ -61,6 +61,7 @@ try:
                         
             # Name of Serie A team
             team_name = response.xpath('//h1/text()').extract_first()
+            team_name = team_name.upper()
             
             # Table containing all the players of that team
             table = response.xpath('//table[contains(@id,"DataTables_Table_0")]'+
