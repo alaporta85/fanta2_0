@@ -12,6 +12,10 @@ g = open('SerieA_players_database.pckl', 'rb')
 players_database = pickle.load(g)
 g.close()
 
+h = open('schedule.pckl', 'rb')
+schedule = pickle.load(h)
+h.close()
+
 class Player(object):
     def __init__(self,name):
         self.name = name
