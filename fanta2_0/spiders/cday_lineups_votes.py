@@ -86,7 +86,7 @@ class Cday_lineups_votes(scrapy.Spider):
             # and set it as last_scraped_day
             self.last_scraped_day = int(lineups[random_team][-1][0][0][3:])
 
-    # To handle some 302 Redirecting issue
+    # To handle some 302 Redirecting issues
     handle_httpstatus_list = [302]
     
     name = 'cday_lineups_votes'
