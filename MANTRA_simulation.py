@@ -1,5 +1,6 @@
 import os
 import pickle
+import copy
 
 path = '/Users/andrea/Desktop/fanta2_0'
 os.chdir(path)
@@ -100,7 +101,7 @@ class Fantateam(object):
         
     def lineup(self, day):
         return self.lineups[day-1]
-    
+                
     def players(self):
         return self.players
     

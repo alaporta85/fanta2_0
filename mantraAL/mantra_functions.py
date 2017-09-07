@@ -1,16 +1,21 @@
-from schemes_allowed_changes import schemes, allowed_changes
+from schemes_allowed_changes import schemes, compatible_roles, allowed_changes
 import pickle
 import random
 from itertools import combinations
 import copy
 
 f=open('esempi_panchina.pckl', 'rb')
-lineups = pickle.load(f)
+lineups1 = pickle.load(f)
+lineups2 = pickle.load(f)
 f.close()
 
 f=open('esempi_voti.pckl', 'rb')
 players_database = pickle.load(f)
 f.close()
+
+l = open('/Users/andrea/Desktop/fanta2_0/all_roles.pckl', 'rb')
+all_roles = pickle.load(l)
+l.close()
 
 def take_vote_from_database(player, day, mode='ST'):
     try:
@@ -61,7 +66,7 @@ def check_defense(list_of_tuples, module):
         return False
     
     for player in list_of_tuples:
-        if not set(player[2]).isdisjoint(roles):
+        if not set(all_roles[player[1]]).isdisjoint(roles):
             new_defense.append(player)
             
     all_possible_defenses = combinations(new_defense, n_defenders_in_module)
@@ -77,7 +82,7 @@ def check_midfield(list_of_tuples, module):
         return False
     
     for player in list_of_tuples:
-        if not set(player[2]).isdisjoint(roles):
+        if not set(all_roles[player[1]]).isdisjoint(roles):
             new_midfield.append(player)
             
     all_possible_midfields = combinations(new_midfield, n_midfielders_in_module)
@@ -93,15 +98,23 @@ def check_attack(list_of_tuples, module):
         return False
     
     for player in list_of_tuples:
-        if not set(player[2]).isdisjoint(roles):
+        if not set(all_roles[player[1]]).isdisjoint(roles):
             new_attack.append(player)
             
     all_possible_attacks = combinations(new_attack, n_forwards_in_module)
     
     return list(all_possible_attacks)
 
+def all_players_are_different(list1, list2, list3):
+    if (len(set(list1).intersection(list2)) == 0
+    and len(set(list1).intersection(list3)) == 0
+    and len(set(list2).intersection(list3)) == 0):
+        return True
+    else:
+        return False
 
-def mantra_simulation(list_of_tuples):
+
+def valid_lineups(list_of_tuples):
     
     field,bench,n_subst = players_with_vote(list_of_tuples, mode='ST')
     
@@ -116,34 +129,83 @@ def mantra_simulation(list_of_tuples):
         all_lineups.append(new_field)
     
     for lineup in all_lineups:
+            
         if (check_defense(lineup,'433')
         and check_midfield(lineup,'433')
         and check_attack(lineup,'433')):
             
-            a = check_defense(lineup,'433')
-            b = check_midfield(lineup,'433')
-            c = check_attack(lineup,'433')
+            possible_defenses = check_defense(lineup,'433')
+            possible_midfields = check_midfield(lineup,'433')
+            possible_attacks = check_attack(lineup,'433')
                         
-            for x in a:
-                new_a = [i[1] for i in x]
-                for y in b:
-                    new_b = [i[1] for i in y]
-                    for z in c:
-                        new_c = [i[1] for i in z]
+            for defense in possible_defenses:
+                clean_def = [i[1] for i in defense]
+                for midfield in possible_midfields:
+                    clean_mid = [i[1] for i in midfield]
+                    for attack in possible_attacks:
+                        clean_att = [i[1] for i in attack]
                         
-                        if (len(set(new_a).intersection(new_b)) == 0
-                        and len(set(new_a).intersection(new_c)) == 0
-                        and len(set(new_b).intersection(new_c)) == 0):
+                        if all_players_are_different(clean_def, clean_mid, clean_att):
                             all_valid_lineups.append(lineup)
+                            
             
     return all_valid_lineups
     
+def optimal_solution(list_of_tuples, schemes_of_module):    
     
-
-
-
-
-
+    def reduce_roles(list_of_tuples, schemes_of_module):
+        needed_roles = set([x for y in schemes_of_module for x in y.split('/')])
+        
+        reduced_list = []
+        
+        for i in list_of_tuples:
+            old_roles = i[2]
+            new_roles = copy.copy(old_roles)
+            for x in old_roles:
+                if not x in needed_roles:
+                    new_roles.remove(x)
+            
+            reduced_list.append((i[0], i[1], new_roles))
+        
+        return reduced_list
+    
+    def deploy_players(reduced_list, schemes_of_module):
+        
+        new_list = copy.copy(reduced_list)
+        new_schemes = copy.copy(schemes_of_module)
+        
+        for player in reduced_list:
+            role = player[2]
+            if len(role)==1:
+                role_to_delete = set(compatible_roles[role[0]]).intersection(schemes_of_module)
+                role_to_delete = list(role_to_delete)[0]
+                new_list.remove(player)
+                try:
+                    new_schemes.remove(role_to_delete)
+                except ValueError:
+                    return False
+                    
+        return new_list,new_schemes
+    
+    def operate(list_of_tuples, schemes_of_module):
+        try:
+            reduced_list = reduce_roles(list_of_tuples, schemes_of_module)
+            deployed_list,new_schemes = deploy_players(reduced_list, schemes_of_module)
+            
+            if len(deployed_list) == 0:
+                return original
+            elif len(deployed_list) == len(list_of_tuples):
+                return False
+            else:
+                return operate(deployed_list,new_schemes)
+        except TypeError:
+            return False
+    
+    original = copy.copy(list_of_tuples)
+    
+    res = operate(list_of_tuples, schemes_of_module)
+    return res
+            
 
 
 
