@@ -8,6 +8,7 @@ f=open('esempi_panchina.pckl', 'rb')
 lineups1 = pickle.load(f)
 lineups2 = pickle.load(f)
 lineups3 = pickle.load(f)
+lineups4 = pickle.load(f)
 f.close()
 
 f=open('esempi_voti.pckl', 'rb')
@@ -21,8 +22,11 @@ l.close()
 def take_vote_from_database(player, day, mode='ST'):
     
     '''This function returns the vote from the database for the specified
-       player in that specific day. In case player does NOT have a vote in that
-       day, it manages the KeyError and returns n.e. (not evaluated).'''
+       player in that specific day. By default, the mode is 'ST' (statistical)
+       which means we take the Alvin482 vote. When 'FG' is specified as mode
+       than we take the normal votes from Fantagazzetta. In case player does
+       NOT have a vote in that day, it manages the KeyError and returns n.e.
+       (not evaluated).'''
        
     try:
         for atuple in players_database[player]:
@@ -39,9 +43,9 @@ def players_with_vote(list_of_tuples, mode='ST'):
     
     '''This function returns two lists (field and bench) and a number (n_subst)
        which represent the players who received vote in the field, in the bench
-       and the number of substitutions needed by the fantateam. In case more
-       than three substitutions are needed, the value for n_subst will be three
-       anyway.'''
+       and the number of substitutions needed by the fantateam, respectively.
+       In case more than 3 substitutions are needed, the value for n_subst
+       will be set to 3 anyway.'''
        
     field = []
     bench = []
@@ -207,16 +211,20 @@ def all_players_are_different(list1, list2, list3):
         return False
 
 
-def valid_lineups(list_of_tuples, module):
+def valid_lineups(list_of_tuples, module, solution, mode='ST'):
     
-    '''This function uses all the filters defined above to return a list
-       containing ALL the valid combinations of the original lineup given by
-       the fantaplayer (list_of_tuples). "Valid" means that all of them are
-       lineups that could be perfectly working according to the rules of the
-       game. Whether they will work or not it depends on the module chosen by
-       the fantaplayer.'''
+    '''This function returns a list containing ALL the valid combinations of
+       the original lineup given by the fantaplayer (list_of_tuples). "Valid"
+       means that all of them are lineups that could be perfectly working
+       according to the rules of the game. If "solution" == "optimal"
+       than it will return all the combination AFTER applying all the filters
+       definded before. If "solution" == "efficient" it returns all the
+       combinations WITHOUT ANY filter.'''
     
-    field,bench,n_subst = players_with_vote(list_of_tuples, mode='ST')
+    if mode == 'FG':
+        field,bench,n_subst = players_with_vote(list_of_tuples, 'FG')
+    else:
+        field,bench,n_subst = players_with_vote(list_of_tuples)
     
     # This block of code is used to handle the substitution of the goal-keeper
     # which according to the rules has to be substituted as first ALWAYS.
@@ -244,7 +252,7 @@ def valid_lineups(list_of_tuples, module):
     # players equal to the number of allowed substitutions
     players_from_bench = list(combinations(bench, n_subst))
     all_lineups = []                  # All candidates
-    all_valid_lineups = []            # All valid candidates
+    optimal_lineups = []              # All candidates for an optimal solution
     
     # First we combine players in the field with each combination of players
     # from the bench. The resulting lineup will be a candidate to be checked
@@ -280,11 +288,6 @@ def valid_lineups(list_of_tuples, module):
                 for midfield in possible_midfields:
                     for attack in possible_attacks:
                         
-# =============================================================================
-#                         clean_def = [x[1] for x in defense]
-#                         clean_mid = [y[1] for y in midfield]
-#                         clean_att = [z[1] for z in attack]
-# =============================================================================
                         # If there are no repeated players we create the new
                         # lineup and it will be one of the valid candidates
                         if all_players_are_different(defense,
@@ -294,21 +297,22 @@ def valid_lineups(list_of_tuples, module):
                             new_lineup = [gkeeper] + list(defense)\
                                        + list(midfield) + list(attack)
                             
-                            all_valid_lineups.append(new_lineup)                            
+                            optimal_lineups.append(new_lineup)                            
             
-    return all_valid_lineups
+    if solution == 'optimal':
+        return optimal_lineups
+    elif solution == 'efficient':
+        return all_lineups
     
     
-def optimal_solution(list_of_tuples, module):
+def find_solution(list_of_tuples, module):
     
-    '''This function checks if an optimal solution is available.
-       A solution is called optimal when all the players thah contributes to
-       the final score (including the ones entered from the bench) are arranged
-       in a way that implies NO change in module and NO malus. It returns the
-       final lineup that will be used to calculate the final score in case it
-       exists. Otherwise it returns False. To check if an optimal solution
-       exists we RECURSIVELY apply two functions (reduce_roles and
-       deploy_players) inside a third one (calculate).'''
+    '''This function checks if a solution is available, according to the module.
+       A solution is found when all the players thah contributes to
+       the final score (including the ones entered from the bench) can be
+       arranged in a way consistent with possible roles defined by the module.
+       It returns the final lineup that will be used to calculate the final
+       score in case it exists. Otherwise it returns False.'''
     
     def reduce_roles(list_of_tuples, roles_of_module):
         
@@ -356,6 +360,11 @@ def optimal_solution(list_of_tuples, module):
                                                  .intersection(roles_of_module)
                 role_to_delete = list(role_to_delete)[0]
                 new_list.remove(player)
+                
+                # "try" method is used to handle the cases where the role we
+                # want to remove is not in the list anymore. The error means
+                # that the candidate can not be a solution and it returns
+                # False.
                 try:
                     new_schemes.remove(role_to_delete)
                 except ValueError:
@@ -390,6 +399,14 @@ def optimal_solution(list_of_tuples, module):
         '''This function recursively applies the reduce_roles and deploy_players
            functions to look for the right solution, if it exists.'''
         
+        # "try" method is used to handle the cases when the function
+        # deploy_players returns False instead of the two lists (to_deploy_list
+        # and roles_left). In that case we would have
+        #
+        #            to_deploy_list,roles_left = False
+        #
+        # which gives a TypeError. In our case the error means that the
+        # candidate can not be a solution and it returns False.
         try:
             reduced_list = reduce_roles(candidate, roles_of_module)
             to_deploy_list,roles_left = deploy_players(reduced_list, roles_of_module)
@@ -397,14 +414,14 @@ def optimal_solution(list_of_tuples, module):
             # If all players are deployed the lineup represents an optimal
             # solution and we return it
             if len(to_deploy_list) == 0:
-                return O_solution
+                return True
             
             # If the function deploy_players is NOT able to deploy any player
             # but the roles to deploy are the same as the roles left, the
             # lineup represents an optimal solution and we return it
             elif (len(to_deploy_list) == len(candidate)
             and same_roles_left(to_deploy_list, roles_left)):
-                return O_solution
+                return True
             
             # If the function deploy_players is NOT able to deploy any player
             # and the roles to deploy are different from the roles left, the
@@ -420,53 +437,100 @@ def optimal_solution(list_of_tuples, module):
         except TypeError:
             return False
     
-    O_solution = [1]
-
+    # If a solution is found we return True
     if calculate(list_of_tuples, schemes[module]):
-        O_solution = copy.copy(list_of_tuples)
-        return O_solution
+        return True
     else:
         return False
 
     
-def MANTRA_simulation(lineup, module):
+def MANTRA_simulation(lineup, module, mode='ST'):
+    
+    '''This function returns the lineup chosen by the fantaplayer where all the
+       players who contribute to the final score are uppercase and the others
+       lowercase. It first tries to find an optimal solution. If it exists it
+       will be returned otherwise the function will look for an efficient
+       solution. Again, if it exists it will be returned otherwise the function
+       will return an adapted solution.'''
+    
+    # We need all the modules to be able to iterate over them in case of an
+    # efficient solution is needed. Before using them we remove from the list
+    # the initial module chosen by the fantaplayer (see below)
+    all_modules = ['343','3412','3421','352','442','433',
+                   '4312','4321','4231','4411','4222']
+    
+    # Initialize the new module, in case of efficient solution
+    new_module = 0
     
     # Make a copy of the starting lineup
     original = copy.copy(lineup)
     
-    # Initialize a list for the optimal solution, if founded. With an empty
-    # list it does not work
-    modified = [1]
+    # Initialize a list for the final solution. With an empty list it does not
+    # work
+    final = 0
     
-    all_valid_candidates = valid_lineups(lineup, module)
+    # As explained already, we first try to find an otimal solution
+    if mode == 'FG':
+        all_valid_candidates = valid_lineups(lineup, module, 'optimal', 'FG')
+    else:
+        all_valid_candidates = valid_lineups(lineup, module, 'optimal')
     
     for candidate in all_valid_candidates:
         
-        if optimal_solution(candidate, module):
-            modified = copy.copy(candidate)
+        if find_solution(candidate, module):
+            final = copy.copy(candidate)
             break
+    
+    # In case an optimal solution does not exist we try to find an efficient
+    # solution. To do that we try each lineup combination (FOLLOWING THE ORDER
+    # IN THE BENCH) with each module (different from the input "module").
+    if not final:
+        if mode == 'FG':
+            all_valid_candidates = valid_lineups(lineup, module, 'efficient', 'FG')
+        else:
+            all_valid_candidates = valid_lineups(lineup, module, 'efficient')
+        modules_for_efficient_solution = copy.copy(all_modules)
+        modules_for_efficient_solution.remove(module)
+        for candidate in all_valid_candidates:
+            for a_module in modules_for_efficient_solution:
+                if find_solution(candidate, a_module):
+                    new_module = a_module
+                    final = copy.copy(candidate)
+                    break
+            if final:
+                break
     
     # This is for printing the result. We use the try method to handle the
     # TypeError case. In fact if an optimal solution is not found, the "if"
     # statement in the code below will try to subscript an integer ([1]) and
     # that will give an error
-    try:
         
-        # Initialize the final list. In this list, only players with vote will be
-        # printed uppercase
-        printed_lineup =[]
-        
-        for player in original:
-            if player[1] in [data[1] for data in modified]:
-                printed_lineup.append(player)
-            else:
-                new_tuple = (player[0], player[1].title(), player[2])
-                printed_lineup.append(new_tuple)
-                
-        return printed_lineup
+    # This is for printing the result. We initialize the final list. In this
+    # list, only players with vote will be printed uppercase
+    printed_lineup =[]
     
-    except TypeError:
-        return False
+    for player in original:
+        if player[1] in [data[1] for data in final]:
+            printed_lineup.append(player)
+        else:
+            new_tuple = (player[0], player[1].title(), player[2])
+            printed_lineup.append(new_tuple)
+    
+    
+    separator = '- - - - - - - - - - - - - -'
+    printed_lineup.insert(11, separator)
+    
+    if not new_module:
+        print('\n')
+        print('Optimal solution found: module is %s' % module)
+        print('\n')
+    else:
+        print('\n')
+        print('Efficient solution found: module changed from %s to %s'
+              % (module, new_module))
+        print('\n')
+    
+    return printed_lineup
 
 
 
