@@ -367,7 +367,11 @@ class Cday_lineups_votes(scrapy.Spider):
                     # append the new tuple to the previous ones
                     else:
                         players_database[name].append(fin_tuple)
-                        
+        
+        for player in players_database:
+            players_database[player] = sorted(players_database[player],
+                                              key=lambda x:x[0])
+                
         # Save the updated version of the database
         f = open('SerieA_players_database.pckl', 'wb')
         pickle.dump(players_database, f)
