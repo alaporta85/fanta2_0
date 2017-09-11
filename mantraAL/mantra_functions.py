@@ -1,7 +1,6 @@
-from schemes_allowed_changes import schemes, compatible_roles, allowed_changes
+from schemes_allowed_changes2 import schemes, compatible_roles, malus_roles
 import pickle
-import random
-from itertools import combinations
+from itertools import combinations, permutations
 import copy
 
 f=open('esempi_panchina.pckl', 'rb')
@@ -9,6 +8,9 @@ lineups1 = pickle.load(f)
 lineups2 = pickle.load(f)
 lineups3 = pickle.load(f)
 lineups4 = pickle.load(f)
+lineups5 = pickle.load(f)
+lineups6 = pickle.load(f)
+lineups7 = pickle.load(f)
 f.close()
 
 f=open('esempi_voti.pckl', 'rb')
@@ -18,6 +20,7 @@ f.close()
 l = open('/Users/andrea/Desktop/fanta2_0/all_roles.pckl', 'rb')
 all_roles = pickle.load(l)
 l.close()
+
 
 def take_vote_from_database(player, day, mode='ST'):
     
@@ -355,16 +358,28 @@ def find_solution(list_of_tuples, module):
         
         for player in reduced_list:
             role = player[2]
-            if len(role)==1:
-                role_to_delete = set(compatible_roles[role[0]])\
-                                                 .intersection(roles_of_module)
-                role_to_delete = list(role_to_delete)[0]
+            if len(role)==1 and role[0] in roles_of_module:
+                role_to_delete = role[0]
                 new_list.remove(player)
                 
                 # "try" method is used to handle the cases where the role we
                 # want to remove is not in the list anymore. The error means
                 # that the candidate can not be a solution and it returns
                 # False.
+                try:
+                    new_schemes.remove(role_to_delete)
+                except ValueError:
+                    return False
+                
+            elif (len(role)==1
+                  and set(compatible_roles[role[0]])\
+                  .intersection(roles_of_module)):
+                
+                role_to_delete = set(compatible_roles[role[0]])\
+                                                 .intersection(roles_of_module)
+                role_to_delete = list(role_to_delete)[0]
+                new_list.remove(player)
+
                 try:
                     new_schemes.remove(role_to_delete)
                 except ValueError:
@@ -442,6 +457,283 @@ def find_solution(list_of_tuples, module):
         return True
     else:
         return False
+    
+def find_adapted_solution(list_of_tuples, module):
+    
+    '''This function checks if an adapted solution is available, according to
+       the module. By using all the functions defined inside it will return
+       True if an adapted solution exists and False if not.'''
+    
+    def reduce_roles(list_of_tuples, roles_of_module):
+        
+        '''This function eliminates from the list of roles of each player all
+           the roles that are not allowed in the chosen module. For example, if
+           the list of roles of a player is ['Dc', 'Dd'] and the module is 343
+           (or any with 3 defenders) this function will return ['Dc'] as list
+           of roles of the player because 'Dd' is not allowed in 343.'''
+                
+        # Create the list of roles needed in the module. Roles like 'M/C' will
+        # be split as 'M' and 'C'
+        needed_roles = set([x for y in roles_of_module for x in y.split('/')])
+        
+        reduced_list = []
+        
+        for player in list_of_tuples:
+            old_roles = player[2]
+            new_roles = copy.copy(old_roles)
+            
+            # If the player has no valid roles for the module we do not do
+            # anything (instead of deleting all of them) because those players
+            # will be the ones that will be deployed at the end and will
+            # receive a malus
+            if set(old_roles).isdisjoint(needed_roles):
+                    pass
+            
+            # Otherwise we delete only the ones which are not allowed
+            else:
+                for role in old_roles:
+                    if role not in needed_roles and len(new_roles) > 1:
+                        new_roles.remove(role)
+                
+            
+            reduced_list.append((player[0], player[1], new_roles))
+        
+        return reduced_list
+    
+    def deploy_players(reduced_list, roles_of_module):
+        
+        '''This function deploys the players in the lineup according to the
+           module. It deploys only the players who have one role, delete the
+           role from the roles to be covered and delete the player from the
+           players to be deployed. It returns the lists of the non-deployed
+           players and non-covered roles.'''
+        
+        new_list = copy.copy(reduced_list)
+        new_schemes = copy.copy(roles_of_module)
+        
+        for player in reduced_list:
+            role = player[2]
+            
+            # First we try to delete the same role: if player is a 'M' than we
+            # look for 'M' in the positions to be covered
+            if len(role)==1 and role[0] in new_schemes:
+                role_to_delete = role[0]
+                new_list.remove(player)
+                new_schemes.remove(role_to_delete)
+            
+            # If there is no 'M' than we look for the compatible roles, which
+            # are the roles where 'M' is contained ('M/C' in our case)
+            elif (len(role)==1
+                  and set(compatible_roles[role[0]])\
+                  .intersection(new_schemes)):
+                
+                role_to_delete = set(compatible_roles[role[0]])\
+                                                 .intersection(new_schemes)
+                role_to_delete = list(role_to_delete)[0]
+                new_list.remove(player)
+                new_schemes.remove(role_to_delete)
+            
+            # If the role is not present in the positions to be covered we do
+            # not do anything, just skip it (it will be used later for malus)
+            elif len(role)==1 and role[0] not in new_schemes:
+                pass
+                    
+        return new_list,new_schemes
+    
+    def any_in_malus_role(roles_to_check, substitute):
+        
+        '''This function splits roles like 'M/C' in ['M','C'] and checks if any
+           of them can be covered with malus by the role 'substitute'. If at
+           least one of them can be covered it returns True, else False.'''
+        
+        new_roles = roles_to_check.split('/')
+        
+        count = 0
+        
+        for role in new_roles:
+            if role in malus_roles[substitute]:
+                count += 1
+                
+        if count == 0:
+            return False
+        else:
+            return True
+    
+    def malus_roles_left(players_left, roles_left):
+        
+        '''This function is used to handle the case when for example there are
+           still players to be deployed in players_left list but none of the
+           roles of such players is in the roles_left list. So we check whether
+           it is possible to deploy ALL of them with 1 or more malus.'''
+        
+        try:
+            # Depending on the module the available roles with malus for 'W' change
+            special_modules = ['352', '442', '4411']
+            
+            # To store the roles which are left to cover after modifing the
+            # roles_left list according to the special modules
+            adapted_roles = []
+            
+            # Permutations of the players still to be deployed. We do that because
+            # we only want that combination of players in which ALL of them are
+            # deployed
+            players_perm = permutations(players_left, len(players_left))
+            
+            # For modules in special_modules the rules for the substitutions of
+            # the role 'W' are different. So here we take the roles inside the
+            # input roles_left and directly append them in adapted roles if they
+            # are != 'W'. In case there is a 'W' between the players to be deployed
+            # we than modify it to be either 'W1' or 'W2' depending on the module
+            # and append them
+            for role in roles_left:
+                if role == 'W' and module in special_modules:
+                    adapted_roles.append('W2')
+                elif role == 'W' and module not in special_modules:
+                    adapted_roles.append('W1')
+                else:
+                    adapted_roles.append(role)
+            
+            # For each permutation of players to be deployed        
+            for perm in players_perm:
+                
+                # Make a copy of the roles to be covered so we can use it later to
+                # delete roles that we are able to cover
+                copy_of_adapted_roles = copy.copy(adapted_roles)
+                
+                # For each player in the permutation we make a copy of his roles
+                # and for each of these roles we check if they are allowed to cover
+                # (with a malus) any of the still uncovered positions in the field.
+                # If yes we delete the role which is now covered from the list of
+                # uncovered role, delete it also from the roles of the player and
+                # finally break the loop to be able to go to the next player in the
+                # permutation. If no we just break the loop
+                for player in perm:
+                    roles = player[2]
+                    copy_of_roles = copy.copy(roles)
+                    for role in roles:
+                        for adapted_role in copy_of_adapted_roles:
+                            if any_in_malus_role(adapted_role, role):
+                                copy_of_adapted_roles.remove(adapted_role)
+                                copy_of_roles.remove(role)
+                                break
+                            else:
+                                break
+                        
+                        # This is to decide if we need to procede with the next
+                        # player of the permutation (condition satisfied) or with
+                        # the next role, if there is any, of the same player.
+                        if len(copy_of_roles) != len(roles):
+                            break
+                
+                # If after all the players in the permutation we have covered all
+                # the positions in the field we return True, otherwise we check
+                # the next permutation of players
+                if len(copy_of_adapted_roles) == 0:
+                    return True
+            
+            # If after all the permutaions we still have positions in the field
+            # still to be covered, this means that it is not possible to find an
+            # adapted solution for the original lineup and we return False
+            if len(copy_of_adapted_roles) > 0:
+                return False
+            
+        except KeyError:
+            return list_of_tuples
+        
+    
+    def calculate(candidate, roles_of_module, iteration):
+        
+        '''This function recursively applies the reduce_roles and deploy_players
+           functions to look for the right solution, if it exists.'''
+        
+# =============================================================================
+#         def role_to_delete(to_deploy_list, roles_to_reduce):
+#             
+#             all_roles_comb = combinations(roles_to_reduce, len(to_deploy_list))
+#             
+#             reduced_roles = 0
+#             
+#             malus = 4
+#             
+#             for comb in all_roles_comb:
+#                 for role in comb:
+# =============================================================================
+                    
+        
+        # "try" method is used to handle the cases when the function
+        # deploy_players returns False instead of the two lists (to_deploy_list
+        # and roles_left). In that case we would have
+        #
+        #            to_deploy_list,roles_left = False
+        #
+        # which gives a TypeError. In our case the error means that the
+        # candidate can not be a solution and it returns False.
+        try:
+            reduced_list = reduce_roles(candidate, roles_of_module)
+            new_iteration = iteration + 1
+            to_deploy_list,roles_left = deploy_players(reduced_list, roles_of_module)
+            
+            if len(to_deploy_list) < len(roles_left):
+                print('esatto')
+            
+            
+            # If all players are deployed the lineup represents an optimal
+            # solution and we return it
+            if len(to_deploy_list) == 0:
+                return True
+            
+            # If the function deploy_players is NOT able to deploy any player
+            # but the roles to deploy are the same as the roles left, the
+            # lineup represents an optimal solution and we return it
+            elif (len(to_deploy_list) == len(candidate)
+            and malus_roles_left(to_deploy_list, roles_left)):
+                return True
+#                return candidate, roles_left
+            
+            # If the function deploy_players is NOT able to deploy any player
+            # and the roles to deploy are different from the roles left, the
+            # lineup is NOT an optimal solution and we return False
+            elif (len(to_deploy_list) == len(candidate)
+            and not malus_roles_left(to_deploy_list, roles_left)):
+                return False
+            
+            # Otherwise we repeat the process
+            else:
+                return calculate(to_deploy_list, roles_left, new_iteration)
+            
+        except TypeError:
+            return False
+    
+    iteration = 0
+    
+    # If a solution is found we return True
+    if calculate(list_of_tuples, schemes[module], iteration):
+        return True
+    else:
+        return False
+
+# =============================================================================
+# #    iteration = 0
+#     
+#     reduced_list = reduce_roles(list_of_tuples,schemes[module])
+# #    iteration += 1
+#     aaa,bbb = deploy_players(reduced_list,schemes[module])
+#     
+# #    print(aaa,bbb)
+#     
+#     reduced_list = reduce_roles(aaa,bbb)
+#     ccc,ddd = deploy_players(reduced_list,bbb)
+#     
+# #    print(ccc,ddd)
+#     
+#     reduced_list = reduce_roles(ccc,ddd)
+#     eee,fff = deploy_players(reduced_list,ddd)
+#     
+#     print(malus_roles_left(eee,fff))
+#     
+# #    print(eee,fff)
+# =============================================================================
+    
 
     
 def MANTRA_simulation(lineup, module, mode='ST'):
@@ -460,7 +752,8 @@ def MANTRA_simulation(lineup, module, mode='ST'):
                    '4312','4321','4231','4411','4222']
     
     # Initialize the new module, in case of efficient solution
-    new_module = 0
+    efficient_module = 0
+    adapted_module = 0
     
     # Make a copy of the starting lineup
     original = copy.copy(lineup)
@@ -494,7 +787,22 @@ def MANTRA_simulation(lineup, module, mode='ST'):
         for candidate in all_valid_candidates:
             for a_module in modules_for_efficient_solution:
                 if find_solution(candidate, a_module):
-                    new_module = a_module
+                    efficient_module = a_module
+                    final = copy.copy(candidate)
+                    break
+            if final:
+                break
+            
+    if not final:
+        if mode == 'FG':
+            all_valid_candidates = valid_lineups(lineup, module, 'efficient', 'FG')
+        else:
+            all_valid_candidates = valid_lineups(lineup, module, 'efficient')
+        modules_for_adapted_solution = copy.copy(all_modules)
+        for candidate in all_valid_candidates:
+            for a_module in modules_for_adapted_solution:
+                if find_adapted_solution(candidate, a_module):
+                    adapted_module = a_module
                     final = copy.copy(candidate)
                     break
             if final:
@@ -520,14 +828,19 @@ def MANTRA_simulation(lineup, module, mode='ST'):
     separator = '- - - - - - - - - - - - - -'
     printed_lineup.insert(11, separator)
     
-    if not new_module:
+    if not efficient_module and not adapted_module:
         print('\n')
         print('Optimal solution found: module is %s' % module)
         print('\n')
-    else:
+    elif efficient_module:
         print('\n')
         print('Efficient solution found: module changed from %s to %s'
-              % (module, new_module))
+              % (module, efficient_module))
+        print('\n')
+    else:
+        print('\n')
+        print('Adapted solution found: module changed from %s to %s'
+              % (module, adapted_module))
         print('\n')
     
     return printed_lineup
