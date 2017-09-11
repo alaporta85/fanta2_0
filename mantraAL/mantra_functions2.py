@@ -529,8 +529,12 @@ def find_adapted_solution(list_of_tuples, module):
             else:
                 adapted_roles.append(role)
         
+        n_malus = 0
+        
         # For each permutation of players to be deployed        
         for perm in players_perm:
+            
+            n_malus = len(perm)
             
             # Make a copy of the roles to be covered so we can use it later to
             # delete roles that we are able to cover
@@ -565,7 +569,7 @@ def find_adapted_solution(list_of_tuples, module):
             # the positions in the field we return True, otherwise we check
             # the next permutation of players
             if len(copy_of_adapted_roles) == 0:
-                return True
+                return n_malus
         
         # If after all the permutaions we still have positions in the field
         # still to be covered, this means that it is not possible to find an
@@ -609,17 +613,19 @@ def find_adapted_solution(list_of_tuples, module):
                 print('esatto')
             
             
-            # If all players are deployed the lineup represents an optimal
-            # solution and we return it
-            if len(to_deploy_list) == 0:
-                return True
+# =============================================================================
+#             # If all players are deployed the lineup represents an optimal
+#             # solution and we return it
+#             if len(to_deploy_list) == 0:
+#                 return True
+# =============================================================================
             
             # If the function deploy_players is NOT able to deploy any player
             # but the roles to deploy are the same as the roles left, the
             # lineup represents an optimal solution and we return it
             elif (len(to_deploy_list) == len(candidate)
             and malus_roles_left(to_deploy_list, roles_left)):
-                return True
+                return malus_roles_left(to_deploy_list, roles_left)
             
             # If the function deploy_players is NOT able to deploy any player
             # and the roles to deploy are different from the roles left, the
@@ -637,7 +643,7 @@ def find_adapted_solution(list_of_tuples, module):
         
     # If a solution is found we return True
     if calculate(list_of_tuples, schemes[module]):
-        return True
+        return calculate(list_of_tuples, schemes[module])
     else:
         return False
     
@@ -700,6 +706,9 @@ def MANTRA_simulation(lineup, module, mode='ST'):
             if final:
                 break
             
+    final_malus = 4
+    alternative_modules = []
+    
     if not final:
         if mode == 'FG':
             all_valid_candidates = valid_lineups(lineup, module, 'efficient', 'FG')
@@ -709,11 +718,17 @@ def MANTRA_simulation(lineup, module, mode='ST'):
         for candidate in all_valid_candidates:
             for a_module in modules_for_adapted_solution:
                 if find_adapted_solution(candidate, a_module):
-                    adapted_module = a_module
-                    final = copy.copy(candidate)
-                    break
+                    n_malus = find_adapted_solution(candidate, a_module)
+                    if n_malus < final_malus:
+                        final_malus = n_malus
+                        adapted_module = a_module
+                        final = copy.copy(candidate)
+                    if n_malus == final_malus:
+                        alternative_modules.append(a_module)
             if final:
                 break
+            
+    alternative_modules.remove(adapted_module)
             
     
     # This is for printing the result. We use the try method to handle the
@@ -749,6 +764,8 @@ def MANTRA_simulation(lineup, module, mode='ST'):
         print('\n')
         print('Adapted solution found: module changed from %s to %s'
               % (module, adapted_module))
+        print('\n')
+        print('Equivalent modules were: %s.' % alternative_modules)
         print('\n')
     
     return printed_lineup
