@@ -88,8 +88,6 @@ def n_of_subst(list_of_tuples, mode='ST'):
     
     # Set the number of substitutions needed        
     n_subst = 11 - len(field)
-    if n_subst > 3:
-        n_subst = 3
         
     return n_subst
 
@@ -252,21 +250,17 @@ def all_players_are_different(list1, list2, list3):
         return False
 
 
-def valid_lineups(list_of_tuples, module, n_subst, solution, mode='ST'):
+def valid_lineups(field, bench, module, n_subst, filters='YES'):
     
     '''This function returns a list containing ALL the valid combinations of
        the original lineup given by the fantaplayer (list_of_tuples). "Valid"
        means that all of them are lineups that could be perfectly working
-       according to the rules of the game. If "solution" == "optimal"
-       than it will return all the combination AFTER applying all the filters
-       definded before. If "solution" == "efficient" it returns all the
-       combinations WITHOUT ANY filter.'''
-    
-    if mode == 'FG':
-        field,bench = players_with_vote(list_of_tuples, 'FG')
-    else:
-        field,bench = players_with_vote(list_of_tuples)
-        
+       according to the rules of the game. By default 'filters' is set to be
+       'YES' which means the function also returns the list 'optimal_lineups'.
+       If 'NO', it returns only 'all_lineups'. This is used in the special
+       case when there are more than 3 players to substitute. In that case,
+       even when we look for the optimal solution we need all_lineups. Lineups
+       with filters are not valid anymore.'''
             
     # Generate all the combination of the players in the bench. Each
     # combination will be made of a number of players equal to the number of
@@ -333,11 +327,10 @@ def valid_lineups(list_of_tuples, module, n_subst, solution, mode='ST'):
                                        + list(midfield) + list(attack)
                             
                             optimal_lineups.append(new_lineup)
-            
-    if solution == 'optimal':
-        return optimal_lineups
-    elif solution == 'efficient':
+    if filters == 'NO':
         return all_lineups
+    else:
+        return optimal_lineups, all_lineups
     
 def reduce_roles(list_of_tuples, roles_of_module, solution):
         
@@ -430,21 +423,31 @@ def deploy_players(reduced_list, roles_of_module, solution):
             return False
                 
     return new_list,new_schemes
+
+def transf_comb(atuple):
+    res = []
+    for i in atuple:
+        res.append(i)
+    
+    return res
     
     
-def find_solution(list_of_tuples, module):
+def find_solution(list_of_tuples, module, n_of_players_with_vote):
     
     '''This function checks if a solution is available, according to the module.
        It is used in the cases of optimal and efficient solution. For the
        optimal solution it is applied only to the module chosen by the
        fantaplayer while for the efficient solutione it is applied to all the
-       modules following the order in the bench.
+       modules following the order of the players in the bench.
        A solution is found when all the players thah contributes to
        the final score (including the ones entered from the bench) can be
        arranged in a way consistent with possible roles defined by the module
        with NO malus.
-       It returns the final lineup that will be used to calculate the final
-       score in case it exists. Otherwise it returns False.'''
+       The input value 'n_of_players_with_vote' is used to calculate the
+       combinations of the roles in the module. This is used when more than 3
+       substitutions are needed and the algorithm tries to find a solution
+       for each candidate with all the possible combinations of roles.
+       It returns True in case a solution exists. Otherwise False.'''
 
     def same_roles_left(deployed_list, new_schemes):
         
@@ -513,14 +516,27 @@ def find_solution(list_of_tuples, module):
         except TypeError:
             return False
     
-    # If a solution is found we return True
-    if calculate(list_of_tuples, schemes[module]):
-        return True
-    else:
-        return False
+    # Generate all the combinations. Each combination will be made by
+    # n_of_players_with_vote (integer) players. Up to 3 substitutions the value
+    # of n_of_players_with_vote is 10 so there is only 1 possible combination
+    # because len(schemes[module]) == 10, 'Por' is not included there. In case
+    # of 4 subst for example, n_of_players_with_vote == 9 so there will be 10
+    # possible combinations. Each group of players coming from the bench will
+    # be tested with each of these combinations always following the order of
+    # the bench.
+    all_comb = combinations(schemes[module], n_of_players_with_vote)
+    
+    for comb in all_comb:
+        # Change from tuple to list
+        comb = transf_comb(comb)
+        
+        # If a solution is found we return True
+        if calculate(list_of_tuples, comb):
+            return True
+    return False
 
     
-def find_adapted_solution(list_of_tuples, module):
+def find_adapted_solution(list_of_tuples, module, n_of_players_with_vote):
     
     '''This function checks if an adapted solution is available, according to
        the module. By using all the functions defined inside it will return
@@ -675,11 +691,15 @@ def find_adapted_solution(list_of_tuples, module):
         except TypeError:
             return False
         
-    # If a solution is found we return the number of malus
-    if calculate(list_of_tuples, schemes[module]):
-        return calculate(list_of_tuples, schemes[module])
-    else:
-        return False
+    all_comb = combinations(schemes[module], n_of_players_with_vote)
+    
+    for comb in all_comb:
+        comb = transf_comb(comb)
+        # If a solution is found we return the number of malus
+        if calculate(list_of_tuples, comb):
+            return calculate(list_of_tuples, comb)
+    
+    return False
     
     
 def MANTRA_simulation(lineup, module, mode='ST'):
@@ -691,53 +711,51 @@ def MANTRA_simulation(lineup, module, mode='ST'):
        solution. Again, if it exists it will be returned otherwise the function
        will return an adapted solution.'''
        
-    def try_optimal_solution(copy_to_modify, module, n_subst, mode='ST'):
+    def try_optimal_solution(copy_to_modify, module, n_of_players_with_vote,
+                             n_subst,filters='YES'):
         
         '''If an optimal solution exists this function assign it to the
            variable "final" which is defined inside MANTRA_simulation but not
-           globally. That's why we refers to it later by using "nonlocal".'''
-           
-        if mode == 'FG':
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'optimal', 'FG')
-        else:
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'optimal')
-            
+           globally. That's why we refers to it later by using "nonlocal".
+           The input 'filters' decides whether we need to use optimal_lineups
+           ('YES') or all_lineups ('NO').'''
+        
+        nonlocal all_lineups   
+        nonlocal optimal_lineups    
         nonlocal final
-    
-        for candidate in all_valid_candidates:
+        
+        if filters=='NO':
+            for candidate in all_lineups:
+                if find_solution(candidate, module, n_of_players_with_vote):
+                    final = candidate
+                    break
+        else:
+            for candidate in optimal_lineups:
+                if find_solution(candidate, module, n_of_players_with_vote):
+                    final = candidate
+                    break
             
-            if find_solution(candidate, module):
-                final = candidate
-                break
-            
-    def try_efficient_solution(copy_to_modify, module, n_subst, mode='ST'):
+    def try_efficient_solution(copy_to_modify, module, n_of_players_with_vote,
+                               n_subst):
         
         '''If an optimal solution is not found we look for an efficient one.
            In case an efficient solution exists we store the lineup and the
            module.'''
-           
-        if mode == 'FG':
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'efficient', 'FG')
-        else:
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'efficient')
             
         modules_for_efficient_solution = copy.copy(all_modules)
         modules_for_efficient_solution.remove(module)
         
+        nonlocal all_lineups
         nonlocal final
         nonlocal efficient_module
         
         # Iterate over all the candidates
-        for candidate in all_valid_candidates:
+        for candidate in all_lineups:
             
             # And over all the modules
             for a_module in modules_for_efficient_solution:
                 
-                if find_solution(candidate, a_module):
+                if find_solution(candidate, a_module, n_of_players_with_vote):
                     final = candidate
                     efficient_module = a_module
                     break
@@ -747,36 +765,34 @@ def MANTRA_simulation(lineup, module, mode='ST'):
             if final:
                 break
                 
-    def try_adapted_solution(copy_to_modify, module, n_subst, mode='ST'):
+    def try_adapted_solution(copy_to_modify, module, n_of_players_with_vote,
+                             n_subst):
         
         '''If an efficient solution is not found we look for an adapted one.
            In case it exists we store the lineup, the module, the number of
            malus assigned and the other modules that are equally valid.'''
-           
-        if mode == 'FG':
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'efficient', 'FG')
-        else:
-            all_valid_candidates = valid_lineups(copy_to_modify, module,
-                                                 n_subst, 'efficient')
             
         modules_for_adapted_solution = copy.copy(all_modules)
         
+        nonlocal all_lineups
         nonlocal final
         nonlocal adapted_module
         nonlocal malus
         nonlocal alternative_modules
         
         # As for the efficient case we iterate over all the candidates
-        for candidate in all_valid_candidates:
+        for candidate in all_lineups:
             
             # And over all the modules
             for a_module in modules_for_adapted_solution:
                 
                 # If a solution for this candidate with this module exists, we
                 # store the number of malus for this specific case
-                if find_adapted_solution(candidate, a_module):
-                    n_malus = find_adapted_solution(candidate, a_module)
+                if find_adapted_solution(candidate, a_module,
+                                         n_of_players_with_vote):
+                    
+                    n_malus = find_adapted_solution(candidate, a_module,
+                                                    n_of_players_with_vote)
                     
                     # If it is lower than the last one (or less than 4 in the
                     # first case) we overwrite its value, the module and the
@@ -800,27 +816,50 @@ def MANTRA_simulation(lineup, module, mode='ST'):
         # the alternatives
         alternative_modules.remove(adapted_module)
             
-    def look_for_solution(copy_to_modify, module, n_subst, mode='ST'):
+    def look_for_solution(copy_to_modify, module, n_of_players_with_vote,
+                          n_subst, filters='YES'):
         
         '''It sequentially applies the three functions to look for the right
            solution.'''
            
-        if mode == 'FG':
-        
-            try_optimal_solution(copy_to_modify, module, n_subst, mode='FG')
-            if not final:
-                try_efficient_solution(copy_to_modify, module, n_subst,
-                                       mode='FG')
-            if not final:
-                try_adapted_solution(copy_to_modify, module, n_subst,
-                                     mode='FG')
-                
+        if filters=='NO':
+            try_optimal_solution(copy_to_modify,module,n_of_players_with_vote,
+                             n_subst, filters='NO')
         else:
-            try_optimal_solution(copy_to_modify, module, n_subst)
-            if not final:
-                try_efficient_solution(copy_to_modify, module, n_subst)
-            if not final:
-                try_adapted_solution(copy_to_modify, module, n_subst)
+            try_optimal_solution(copy_to_modify,module,n_of_players_with_vote,
+                                 n_subst)
+        if not final:
+            try_efficient_solution(copy_to_modify,module,
+                                   n_of_players_with_vote,n_subst)
+        if not final:
+            try_adapted_solution(copy_to_modify,module,
+                                 n_of_players_with_vote,n_subst)
+            
+    def solve_gkeeper():
+        
+        nonlocal field
+        nonlocal bench
+        nonlocal copy_to_modify
+
+        # Now we start considering the goal keeper issue. If the goal keeper
+        # in the field received a vote we delete all the remaining goal keepers
+        # from the bench
+        if find_gkeeper(field):
+            bench = delete_gkeeper(bench)
+        
+        # If the gkeeper in the field has no vote but the there is at least one
+        # gkeeper in the bench with vote we make the substitution and delete
+        # all the remaining gkeepers from the lineup, if there is any
+        elif not find_gkeeper(field) and find_gkeeper(bench):
+            gkeeper = find_gkeeper(bench)
+            bench = delete_gkeeper(bench)
+            field.insert(0,gkeeper)
+        
+        # If there is no gkeeper with vote neither in the field nor in the
+        # bench than we do not do anything     
+        elif not find_gkeeper(field) and not find_gkeeper(bench):
+            pass
+                
             
     # Make a copy of the lineup because we might want to modify it when we
     # consider the substitution of the goal keeper, which is the first aspect
@@ -834,27 +873,6 @@ def MANTRA_simulation(lineup, module, mode='ST'):
     else:
         field,bench = players_with_vote(lineup)
         n_subst = n_of_subst(lineup)
-
-    # Now we start considering the goal keeper issue. If the goal keeper in the
-    # field received a vote we delete all the remaining goal keepers from the
-    # bench
-    if find_gkeeper(field):
-        bench = delete_gkeeper(bench)
-    
-    # If the gkeeper in the field has no vote but the there is at least one
-    # gkeeper in the bench with vote we make the substitution and delete all
-    # the remaining gkeepers from the lineup, if there is any
-    elif not find_gkeeper(field) and find_gkeeper(bench):
-        gkeeper = find_gkeeper(bench)
-        copy_to_modify = delete_gkeeper(copy_to_modify)
-        copy_to_modify.insert(0,gkeeper)
-        n_subst -= 1
-    
-    # If there is no gkeeper with vote neither in the field nor in the bench
-    # than we do not do anything     
-    elif not find_gkeeper(field) and not find_gkeeper(bench):
-#        copy_to_modify = delete_gkeeper(copy_to_modify)
-        pass
     
     # Make a copy of the starting lineup. We will NOT modify this copy
     original = copy.copy(lineup)
@@ -874,11 +892,62 @@ def MANTRA_simulation(lineup, module, mode='ST'):
     all_modules = ['343','3412','3421','352','442','433',
                    '4312','4321','4231','4411','4222']
     
-    if mode == 'FG':
-        look_for_solution(copy_to_modify, module, n_subst, mode='FG')
+    
+    # If n_subst is below the allowed limit
+    if n_subst <= 3:
+        
+        # Set the variable n_of_players_with_vote to be 10, like normal
+        n_of_players_with_vote = 10
+        
+        # Handle the goal keeper issue
+        solve_gkeeper()
+        
+        # In case we have a gkeeper we assing him to a variable, remove from
+        # the list 'field', generate the candidates, look for the solution and
+        # add the gkeeper in the first place of the final list when done
+        if find_gkeeper(field):
+            gkeeper = field[0]
+            field.remove(gkeeper)
+            optimal_lineups, all_lineups = valid_lineups(field, bench, module,
+                                                         n_subst)
+            look_for_solution(copy_to_modify, module, n_of_players_with_vote,
+                              n_subst)
+            final.insert(0, gkeeper)
+        
+        # If no gkeeper is present we generate the candidates and look for the
+        # solution
+        else:
+           optimal_lineups, all_lineups = valid_lineups(field, bench, module,
+                                                        n_subst)
+           look_for_solution(copy_to_modify, module, n_of_players_with_vote,
+                             n_subst) 
+            
+    # If more than 3 subst are needed we are in a special case.
     else:
-        look_for_solution(copy_to_modify, module, n_subst)
-
+        # We first set the value for the combinations of players
+        n_of_players_with_vote = 13 - n_subst
+        
+        # Then n_subst can not be more than 3
+        n_subst = 3
+        
+        # Same as before but in this case we do NOT want any filter while
+        # looking for the solution. The fact that we now consider less players
+        # than 10 changes everything and filters would return a wrong result
+        solve_gkeeper()
+        if find_gkeeper(field):
+            gkeeper = field[0]
+            field.remove(gkeeper)
+            all_lineups = valid_lineups(field, bench, module,
+                                                         n_subst, filters='NO')
+            look_for_solution(copy_to_modify, module, n_of_players_with_vote,
+                              n_subst, filters='NO')
+            final.insert(0, gkeeper)
+        else:
+            all_lineups = valid_lineups(field, bench, module,
+                                                         n_subst, filters='NO')
+            look_for_solution(copy_to_modify, module, n_of_players_with_vote,
+                              n_subst, filters='NO')
+        
         
     # This is for printing the result. We initialize the final list. In this
     # list, only players with vote will be printed uppercase
@@ -907,8 +976,9 @@ def MANTRA_simulation(lineup, module, mode='ST'):
         print('\n')
     else:
         print('\n')
-        print('Adapted solution found: module changed from %s to %s. '
-              + 'Players with malus: %d' % (module, adapted_module, malus))
+        print('Adapted solution found: module changed from %s to %s.'
+              % (module, adapted_module))
+        print('Players with malus: %d' % malus)
         print('\n')
         print('Equivalent modules were: %s.' % alternative_modules)
         print('\n')
