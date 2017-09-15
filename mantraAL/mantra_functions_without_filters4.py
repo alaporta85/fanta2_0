@@ -304,6 +304,19 @@ def transf_wings(roles_left, module):
             adapted_roles.append(new_role)
             
     return adapted_roles
+
+def order_by_role(list_of_tuples):
+    
+    reference = ['Pc','A','T','W','C','M','E','Dc','Dd','Ds']
+    
+    final = []
+    
+    for role in reference:
+        for player in list_of_tuples:
+            if player[2] == role:
+                final.append(player)
+                
+    return final
     
     
 def find_solution(list_of_tuples,module,n_of_players_with_vote):
@@ -418,24 +431,26 @@ def find_adapted_solution(list_of_tuples,module,n_of_players_with_vote):
        True if an adapted solution exists and False if not.'''
        
     
-    def any_in_malus_role(roles_to_check,substitute):
-        
-        '''This function splits roles like 'M/C' in ['M','C'] and checks if any
-           of them can be covered with malus by the role 'substitute'. If at
-           least one of them can be covered it returns True, else False.'''
-        
-        new_roles = roles_to_check.split('/')
-        
-        count = 0
-        
-        for role in new_roles:
-            if role in malus_roles[substitute]:
-                count += 1
-                
-        if count == 0:
-            return False
-        else:
-            return True
+# =============================================================================
+#     def any_in_malus_role(roles_to_check,substitute):
+#         
+#         '''This function splits roles like 'M/C' in ['M','C'] and checks if any
+#            of them can be covered with malus by the role 'substitute'. If at
+#            least one of them can be covered it returns True, else False.'''
+#         
+#         new_roles = roles_to_check.split('/')
+#         
+#         count = 0
+#         
+#         for role in new_roles:
+#             if role in malus_roles[substitute]:
+#                 count += 1
+#                 
+#         if count == 0:
+#             return False
+#         else:
+#             return True
+# =============================================================================
     
     def malus_roles_left(players_left,roles_left):
         
@@ -458,6 +473,7 @@ def find_adapted_solution(list_of_tuples,module,n_of_players_with_vote):
         # For each permutation of players to be deployed        
         for perm in players_perm:
             
+            count = 0
             temp_malus = 0
             
             # Make a copy of the roles to be covered so we can use it later to
@@ -476,16 +492,17 @@ def find_adapted_solution(list_of_tuples,module,n_of_players_with_vote):
                 role_cand = perm[i][2]
                 if role_to_cover in malus_roles[role_cand]:
                     temp_malus += 1
+                    count += 1
                     copy_of_adapted_roles.remove(role_to_cover)
                 elif (role_to_cover not in malus_roles[role_cand]
                 and role_to_cover in compatible_roles[role_cand]):
+                    count += 1
                     copy_of_adapted_roles.remove(role_to_cover)
                 else:
-                    return False
+                    break
                 
-                if temp_malus < fin_malus:
-                    fin_malus = temp_malus
-
+            if count == len(perm) and temp_malus < fin_malus:
+                fin_malus = temp_malus
             
         if fin_malus != 4:
             return fin_malus
@@ -511,7 +528,7 @@ def find_adapted_solution(list_of_tuples,module,n_of_players_with_vote):
             to_deploy_list,roles_left = deploy_players(candidate,
                                                        roles_of_module,
                                                        'adapted')
-
+            
             # If the function deploy_players is NOT able to deploy any player
             # but the roles to deploy can be covered with a malus we return the
             # number of malus assigned
@@ -533,16 +550,17 @@ def find_adapted_solution(list_of_tuples,module,n_of_players_with_vote):
         except TypeError:
             return False
     
-    all_comb = combinations(schemes[module],n_of_players_with_vote)
-    print(list(all_comb))
+    ordered_lineup = order_by_role(list_of_tuples)
+    
+    all_comb = list(combinations(schemes[module],n_of_players_with_vote))
     
     for comb in all_comb:
         # Change from tuple to list and check wings
         comb = transf_comb(comb)
         comb = transf_wings(comb, module)
         # If a solution is found we return the number of malus
-        if calculate(list_of_tuples,comb):
-            return calculate(list_of_tuples,comb)
+        if calculate(ordered_lineup,comb):
+            return calculate(ordered_lineup,comb)
     
     return False
     
@@ -629,12 +647,6 @@ def MANTRA_simulation(lineup,module,mode='ST'):
 
                 # And over all the modules
                 for a_module in modules_for_adapted_solution:
-# =============================================================================
-#                     if (n_of_players_with_vote == 9
-#                     and all_lineups.index(candidate) == 4
-#                     and candidates_single_role.index(new_cand) == 0):
-#                         print(a_module)
-# =============================================================================
                     
                     # If a solution for this candidate with this module exists, we
                     # store the number of malus for this specific case
@@ -653,11 +665,9 @@ def MANTRA_simulation(lineup,module,mode='ST'):
                             malus = n_malus
                             adapted_module = a_module
                             final = candidate
-
+    
                             alternative_modules.append((a_module,n_malus))
-                        
-                if final:
-                    break
+
             
             if final:
                 break
@@ -667,7 +677,7 @@ def MANTRA_simulation(lineup,module,mode='ST'):
             if x[0] == adapted_module or x[1]!= malus:
                 copy_of_modules.remove(x)
                 
-        alternative_modules = set([x[0] for x in copy_of_modules])
+        alternative_modules = list(set([x[0] for x in copy_of_modules]))
             
     def look_for_solution(module,n_of_players_with_vote,n_subst):
         
